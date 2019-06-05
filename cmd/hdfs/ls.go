@@ -157,7 +157,7 @@ func printLong(tw *tabwriter.Writer, name string, info os.FileInfo, humanReadabl
 	}
 
 	modtime := fi.ModTime()
-	date := modtime.Format("2006-01-_2 15:04")
+	date := modtime.Format("2006-01-02 15:04")
 	/*var timeOrYear string
 	if modtime.Year() == time.Now().Year() {
 		timeOrYear = modtime.Format("2006 15:04")

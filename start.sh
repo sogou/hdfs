@@ -1,0 +1,5 @@
+GOHDFSDIR=$1
+GOHDFSCONFDIR=$2
+
+source $GOHDFSCONFDIR/env.conf
+$GOHDFSDIR/hdfs ls /tmp/test
