@@ -6,18 +6,13 @@ import (
 )
 
 func touch(paths []string, noCreate bool) {
-	paths, nn, err := normalizePaths(paths)
+	paths, client, err := normalizePaths(paths)
 	if err != nil {
 		fatal(err)
 	}
 
 	if len(paths) == 0 {
 		printHelp()
-	}
-
-	client, err := getClient(nn)
-	if err != nil {
-		fatal(err)
 	}
 
 	for _, p := range paths {

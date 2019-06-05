@@ -14,7 +14,7 @@ func get(args []string) {
 		printHelp()
 	}
 
-	sources, nn, err := normalizePaths(args[0:1])
+	sources, client, err := normalizePaths(args[0:1])
 	if err != nil {
 		fatal(err)
 	}
@@ -31,11 +31,6 @@ func get(args []string) {
 
 		_, name := path.Split(source)
 		dest = filepath.Join(cwd, name)
-	}
-
-	client, err := getClient(nn)
-	if err != nil {
-		fatal(err)
 	}
 
 	err = client.Walk(source, func(p string, fi os.FileInfo, err error) error {
@@ -68,12 +63,7 @@ func getmerge(args []string, addNewlines bool) {
 	}
 
 	dest := args[1]
-	sources, nn, err := normalizePaths(args[0:1])
-	if err != nil {
-		fatal(err)
-	}
-
-	client, err := getClient(nn)
+	sources, client, err := normalizePaths(args[0:1])
 	if err != nil {
 		fatal(err)
 	}

@@ -5,21 +5,17 @@ import (
 )
 
 func mkdir(paths []string, all bool) {
-	paths, nn, err := normalizePaths(paths)
-	if err != nil {
-		fatal(err)
-	}
 
 	if len(paths) == 0 {
 		printHelp()
 	}
 
-	client, err := getClient(nn)
-	if err != nil {
-		fatal(err)
-	}
-
 	for _, p := range paths {
+		_, client, err := normalizePaths([]string{p})
+		if err != nil {
+			fatal(err)
+		}
+
 		if hasGlob(p) {
 			fatal(&os.PathError{"mkdir", p, os.ErrNotExist})
 		}

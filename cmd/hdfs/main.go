@@ -16,28 +16,19 @@ import (
 // TODO: cp, tree, test, trash
 
 var (
-	version string
-	usage   = fmt.Sprintf(`Usage: %s COMMAND
+	usage = fmt.Sprintf(`Usage: %s COMMAND
 The flags available are a subset of the POSIX ones, but should behave similarly.
 
 Valid commands:
   ls [-lah] [FILE]...
   rm [-rf] FILE...
-  mv [-nT] SOURCE... DEST
   mkdir [-p] FILE...
   touch [-amc] FILE...
-  chmod [-R] OCTAL-MODE FILE...
-  chown [-R] OWNER[:GROUP] FILE...
-  cat SOURCE...
-  head [-n LINES | -c BYTES] SOURCE...
-  tail [-n LINES | -c BYTES] SOURCE...
-  du [-sh] FILE...
-  checksum FILE...
   get SOURCE [DEST]
-  getmerge SOURCE DEST
   put SOURCE DEST
-  df [-h]
+  du [-sh] FILE...
 `, os.Args[0])
+	version string
 
 	lsOpts = getopt.New()
 	lsl    = lsOpts.Bool('l')
@@ -102,6 +93,7 @@ func main() {
 
 	command := os.Args[1]
 	argv := os.Args[1:]
+
 	switch command {
 	case "-v", "--version":
 		fatal("gohdfs version", version)
@@ -111,15 +103,22 @@ func main() {
 	case "rm":
 		rmOpts.Parse(argv)
 		rm(rmOpts.Args(), *rmr, *rmf)
-	case "mv":
-		mvOpts.Parse(argv)
-		mv(mvOpts.Args(), !*mvn, *mvT)
 	case "mkdir":
 		mkdirOpts.Parse(argv)
 		mkdir(mkdirOpts.Args(), *mkdirp)
 	case "touch":
 		touchOpts.Parse(argv)
 		touch(touchOpts.Args(), *touchc)
+	case "get":
+		get(argv[1:])
+	case "put":
+		put(argv[1:])
+	case "du":
+		duOpts.Parse(argv)
+		du(duOpts.Args(), *dus, *duh)
+	/*case "mv":
+		mvOpts.Parse(argv)
+		mv(mvOpts.Args(), !*mvn, *mvT)
 	case "chown":
 		chownOpts.Parse(argv)
 		chown(chownOpts.Args(), *chownR)
@@ -136,16 +135,12 @@ func main() {
 		du(duOpts.Args(), *dus, *duh)
 	case "checksum":
 		checksum(argv[1:])
-	case "get":
-		get(argv[1:])
 	case "getmerge":
 		getmergeOpts.Parse(argv)
 		getmerge(getmergeOpts.Args(), *getmergen)
-	case "put":
-		put(argv[1:])
 	case "df":
 		dfOpts.Parse(argv)
-		df(*dfh)
+		df(*dfh)*/
 	// it's a seeeeecret command
 	case "complete":
 		complete(argv)
@@ -182,9 +177,13 @@ func getClient(namenode string) (*hdfs.Client, error) {
 		namenode = os.Getenv("HADOOP_NAMENODE")
 	}
 
+	if namenode == "" {
+		return nil, fmt.Errorf("no such file or directory")
+	}
+
 	conf, err := hadoopconf.LoadFromEnvironment()
 	if err != nil {
-		return nil, fmt.Errorf("Problem loading configuration: %s", err)
+		return nil, fmt.Errorf("problem loading configuration: %s", err)
 	}
 
 	options := hdfs.ClientOptionsFromConf(conf)

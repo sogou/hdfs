@@ -15,18 +15,13 @@ func put(args []string) {
 		printHelp()
 	}
 
-	dests, nn, err := normalizePaths(args[1:])
+	dests, client, err := normalizePaths(args[1:])
 	if err != nil {
 		fatal(err)
 	}
 
 	dest := dests[0]
 	source, err := filepath.Abs(args[0])
-	if err != nil {
-		fatal(err)
-	}
-
-	client, err := getClient(nn)
 	if err != nil {
 		fatal(err)
 	}

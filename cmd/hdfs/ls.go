@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -11,38 +12,58 @@ import (
 	"time"
 
 	"github.com/colinmarc/hdfs/v2"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 )
 
 func ls(paths []string, long, all, humanReadable bool) {
-	paths, client, err := getClientAndExpandedPaths(paths)
-	if err != nil {
-		fatal(err)
-	}
 
 	if len(paths) == 0 {
-		paths = []string{userDir(client)}
+		fatal("path is empty")
 	}
 
-	files := make([]string, 0, len(paths))
-	fileInfos := make([]os.FileInfo, 0, len(paths))
-	dirs := make([]string, 0, len(paths))
-	for _, p := range paths {
-		fi, err := client.Stat(p)
+	for _, perPath := range paths {
+		files := make([]string, 0, len(paths))
+		fileInfos := make([]os.FileInfo, 0, len(paths))
+		dirs := make([]string, 0, len(paths))
+
+		if strings.Compare(perPath, "/") == 0 {
+			conf, exception := hadoopconf.LoadFromEnvironment()
+			if exception != nil {
+				fatal("NormalizePaths occur problem loading configuration: ", exception)
+			}
+			for k, v := range conf {
+				if strings.Contains(k, "fs.viewfs.mounttable.nsX.link") {
+					u, err := url.Parse(v)
+					if err == nil && strings.Count(u.Path,"/") == 1{
+						dirs = append(dirs, u.Path)
+					}
+				}
+			}
+
+			for _, dir := range dirs {
+				fmt.Println(dir)
+			}
+			continue
+		}
+
+		abPath, client, err := getClientAndExpandedPaths([]string{perPath})
+
+		if err != nil {
+			fatal(err)
+		}
+		fi, err := client.Stat(abPath[0])
+
 		if err != nil {
 			fatal(err)
 		}
 
 		if fi.IsDir() {
-			dirs = append(dirs, p)
+			dirs = append(dirs, perPath)
 		} else {
-			files = append(files, p)
+			files = append(files, perPath)
 			fileInfos = append(fileInfos, fi)
 		}
-	}
 
-	if len(files) == 0 && len(dirs) == 1 {
-		printDir(client, dirs[0], long, all, humanReadable)
-	} else {
 		if long {
 			tw := lsTabWriter()
 			for i, p := range files {
@@ -55,9 +76,9 @@ func ls(paths []string, long, all, humanReadable bool) {
 				fmt.Println(p)
 			}
 		}
-
+		//fmt.Println()
 		for i, dir := range dirs {
-			if i > 0 || len(files) > 0 {
+			if i > 0 {
 				fmt.Println()
 			}
 
