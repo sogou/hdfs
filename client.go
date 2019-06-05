@@ -100,16 +100,15 @@ type ClientOptions struct {
 //   }
 func ClientOptionsFromConf(conf hadoopconf.HadoopConf) ClientOptions {
 	options := ClientOptions{Addresses: conf.Namenodes()}
-
-	options.UseDatanodeHostname = (conf["dfs.client.use.datanode.hostname"] == "true")
-
-	if strings.ToLower(conf["hadoop.security.authentication"]) == "kerberos" {
-		// Set an empty KerberosClient here so that the user is forced to either
-		// unset it (disabling kerberos altogether) or replace it with a valid
-		// client. If the user does neither, NewClient will return an error.
-		options.KerberosClient = &krb.Client{}
+	if os.Getenv("KERBEROSSWITCH") == "true" || os.Getenv("KERBEROSSWITCH") == "" {
+		options.UseDatanodeHostname = (conf["dfs.client.use.datanode.hostname"] == "true")
+		if strings.ToLower(conf["hadoop.security.authentication"]) == "kerberos" {
+			// Set an empty KerberosClient here so that the user is forced to either
+			// unset it (disabling kerberos altogether) or replace it with a valid
+			// client. If the user does neither, NewClient will return an error.
+			options.KerberosClient = &krb.Client{}
+		}
 	}
-
 	if conf["dfs.namenode.kerberos.principal"] != "" {
 		options.KerberosServicePrincipleName = strings.Split(conf["dfs.namenode.kerberos.principal"], "@")[0]
 	}

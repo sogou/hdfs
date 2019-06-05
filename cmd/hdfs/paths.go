@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"os"
 	"path"
@@ -9,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/colinmarc/hdfs/v2"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 )
 
 var (
@@ -22,47 +24,139 @@ func userDir(client *hdfs.Client) string {
 // normalizePaths parses the hosts out of HDFS URLs, and turns relative paths
 // into absolute ones (by appending /user/<user>). If multiple HDFS urls with
 // differing hosts are passed in, it returns an error.
-func normalizePaths(paths []string) ([]string, string, error) {
+func normalizePaths(paths []string) ([]string, *hdfs.Client, error) {
+
 	namenode := ""
+	abPath := ""
+
 	cleanPaths := make([]string, 0, len(paths))
 
 	for _, rawurl := range paths {
-		url, err := url.Parse(rawurl)
+		fsUrl, err := url.Parse(rawurl)
+
 		if err != nil {
-			return nil, "", err
+			return nil, nil, err
 		}
 
-		if url.Host != "" {
-			if namenode != "" && namenode != url.Host {
-				return nil, "", errMultipleNamenodeUrls
+		if fsUrl.Host != "" {
+			if namenode != "" && namenode != fsUrl.Host {
+				return nil, nil, errMultipleNamenodeUrls
 			}
-
-			namenode = url.Host
+			namenode = fsUrl.Host
 		}
-
-		cleanPaths = append(cleanPaths, path.Clean(url.Path))
+		cleanPaths = append(cleanPaths, path.Clean(fsUrl.Path))
 	}
 
-	return cleanPaths, namenode, nil
+	conf, err := hadoopconf.LoadFromEnvironment()
+	if err != nil {
+		return cleanPaths, nil, fmt.Errorf("NormalizePaths occur problem loading configuration: %s", err)
+	}
+
+	viewfs := strings.Split(conf["fs.defaultFS"], "/")[2]
+	prefixPath := "fs.viewfs.mounttable." + viewfs + ".link."
+
+	if namenode != "" {
+		abPath = getCleanPath(cleanPaths, prefixPath, conf)
+		client, err := getActiveNameNode(namenode, abPath)
+		return cleanPaths, client, err
+	}
+
+	prefixNNX := "dfs.ha.namenodes."
+	prefixNode := "dfs.namenode.rpc-address."
+
+	if strings.Contains(conf["fs.defaultFS"], "hdfs://") { // not viewfs
+		fsUrl := strings.Split(viewfs, ":")[0]
+		nnxArray := strings.Split(conf[prefixNNX + fsUrl], ",")
+		namenode = getNameNodeFromConf(nnxArray, prefixNode, fsUrl, conf)
+
+		abPath = getCleanPath(cleanPaths, prefixPath, conf)
+		client, err := getActiveNameNode(namenode, abPath)
+		return cleanPaths, client, err
+	}
+
+	abPath = getCleanPath(cleanPaths, prefixPath, conf)
+	node := conf[prefixPath + abPath]
+
+	u, err := url.Parse(node)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	nnxArray := strings.Split(conf[prefixNNX + u.Host], ",") // nn3,nn4
+	namenode = getNameNodeFromConf(nnxArray, prefixNode, u.Host, conf) // rsync.master003.sunshine.hadoop.js.ted:8020,rsync.master004.sunshine.hadoop.js.ted:8020
+	activennCli, err := getActiveNameNode(namenode, abPath)
+
+	return cleanPaths, activennCli, err
+}
+
+func getCleanPath(path []string, prefixPath string, conf map[string]string) string {
+	var secondLevelPath string
+	pathsArray := strings.Split(path[0], "/")
+	if len(pathsArray) == 1 {
+		return path[0]
+	}
+
+	firstLevelPath := "/" + pathsArray[1]
+	if len(pathsArray) > 2 && pathsArray[2] != "" {
+		secondLevelPath = firstLevelPath + "/" + pathsArray[2]
+	}
+
+	if conf[prefixPath + secondLevelPath] == "" {
+		return firstLevelPath
+	}
+
+	return secondLevelPath
+}
+
+func getNameNodeFromConf(nnxArray []string, prefixNode string, host string, conf map[string]string) string {
+	var namenode string
+	if nnxArray == nil || len(nnxArray) == 0 {
+		return ""
+	}
+	for _, nni := range nnxArray {
+		tmp := conf[prefixNode+host+"."+nni]
+		namenode += tmp
+		namenode += ","
+	}
+	return strings.Trim(namenode, ",")
+}
+
+func getActiveNameNode(nn string, path string) (*hdfs.Client, error) {
+	namenodeArray := strings.Split(nn, ",")
+	var client *hdfs.Client
+	var err error
+	var node string
+
+	for _, node = range namenodeArray {
+		client, err = getClient(node)
+		if err != nil {
+			continue
+		}
+		_, err = client.Stat(path)
+		if err == nil {
+			break
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+	return client, err
 }
 
 func getClientAndExpandedPaths(paths []string) ([]string, *hdfs.Client, error) {
-	paths, nn, err := normalizePaths(paths)
+
+	paths, nnClient, err := normalizePaths(paths)
+
 	if err != nil {
 		return nil, nil, err
 	}
 
-	client, err := getClient(nn)
+	expanded, err := expandPaths(nnClient, paths)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	expanded, err := expandPaths(client, paths)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return expanded, client, nil
+	return expanded, nnClient, nil
 }
 
 // TODO: not really sure checking for a leading \ is the way to test for

@@ -54,12 +54,7 @@ func completeArg(command, fragment string, position int) {
 }
 
 func completePath(fragment string) {
-	paths, namenode, err := normalizePaths([]string{fragment})
-	if err != nil {
-		return
-	}
-
-	client, err := getClient(namenode)
+	paths, client, err := normalizePaths([]string{fragment})
 	if err != nil {
 		return
 	}

@@ -2,47 +2,68 @@ package main
 
 import (
 	"fmt"
+	"github.com/colinmarc/hdfs/v2"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 	"io"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
 	"strings"
 	"text/tabwriter"
-	"time"
-
-	"github.com/colinmarc/hdfs/v2"
 )
 
 func ls(paths []string, long, all, humanReadable bool) {
-	paths, client, err := getClientAndExpandedPaths(paths)
-	if err != nil {
-		fatal(err)
-	}
 
 	if len(paths) == 0 {
-		paths = []string{userDir(client)}
+		fatal("path is empty")
 	}
 
-	files := make([]string, 0, len(paths))
-	fileInfos := make([]os.FileInfo, 0, len(paths))
-	dirs := make([]string, 0, len(paths))
-	for _, p := range paths {
-		fi, err := client.Stat(p)
+	for _, perPath := range paths {
+		files := make([]string, 0, len(paths))
+		fileInfos := make([]os.FileInfo, 0, len(paths))
+		dirs := make([]string, 0, len(paths))
+
+		if strings.Compare(perPath, "/") == 0 {
+			conf, exception := hadoopconf.LoadFromEnvironment()
+			if exception != nil {
+				fatal("NormalizePaths occur problem loading configuration: ", exception)
+			}
+
+			for k, v := range conf {
+				if strings.Contains(k, "fs.viewfs.mounttable") {
+					u, err := url.Parse(v)
+					if err == nil && strings.Count(u.Path, "/") == 1 {
+						dirs = append(dirs, u.Path)
+					}
+				}
+			}
+			//fmt.Println("/:")
+			for _, dir := range dirs {
+				fmt.Println(dir)
+			}
+			continue
+		}
+
+		abPath, client, err := getClientAndExpandedPaths([]string{perPath})
 		if err != nil {
 			fatal(err)
 		}
 
-		if fi.IsDir() {
-			dirs = append(dirs, p)
-		} else {
-			files = append(files, p)
-			fileInfos = append(fileInfos, fi)
-		}
-	}
+		for _, p := range abPath {
+			fi, err := client.Stat(p)
+			if err != nil {
+				fatal(err)
+			}
 
-	if len(files) == 0 && len(dirs) == 1 {
-		printDir(client, dirs[0], long, all, humanReadable)
-	} else {
+			if fi.IsDir() {
+				dirs = append(dirs, p)
+			} else {
+				files = append(files, p)
+				fileInfos = append(fileInfos, fi)
+			}
+		}
+
 		if long {
 			tw := lsTabWriter()
 			for i, p := range files {
@@ -56,12 +77,8 @@ func ls(paths []string, long, all, humanReadable bool) {
 			}
 		}
 
-		for i, dir := range dirs {
-			if i > 0 || len(files) > 0 {
-				fmt.Println()
-			}
-
-			fmt.Printf("%s/:\n", dir)
+		for _, dir := range dirs {
+			//fmt.Printf("%s/:\n", dir)
 			printDir(client, dir, long, all, humanReadable)
 		}
 	}
@@ -69,6 +86,7 @@ func ls(paths []string, long, all, humanReadable bool) {
 
 func printDir(client *hdfs.Client, dir string, long, all, humanReadable bool) {
 	dirReader, err := client.Open(dir)
+
 	if err != nil {
 		fatal(err)
 	}
@@ -106,7 +124,7 @@ func printDir(client *hdfs.Client, dir string, long, all, humanReadable bool) {
 			fatal(err)
 		}
 
-		printFiles(tw, partial, long, all, humanReadable)
+		printFiles(tw, partial, long, all, humanReadable, dir)
 	}
 
 	if long {
@@ -114,16 +132,17 @@ func printDir(client *hdfs.Client, dir string, long, all, humanReadable bool) {
 	}
 }
 
-func printFiles(tw *tabwriter.Writer, files []os.FileInfo, long, all, humanReadable bool) {
+func printFiles(tw *tabwriter.Writer, files []os.FileInfo, long, all, humanReadable bool, dir string) {
+
 	for _, file := range files {
 		if !all && strings.HasPrefix(file.Name(), ".") {
 			continue
 		}
 
 		if long {
-			printLong(tw, file.Name(), file, humanReadable)
+			printLong(tw, dir + "/" + file.Name(), file, humanReadable)
 		} else {
-			fmt.Println(file.Name())
+			fmt.Println(dir + "/" + file.Name())
 		}
 	}
 }
@@ -140,16 +159,16 @@ func printLong(tw *tabwriter.Writer, name string, info os.FileInfo, humanReadabl
 	}
 
 	modtime := fi.ModTime()
-	date := modtime.Format("Jan _2")
-	var timeOrYear string
+	date := modtime.Format("2006-01-02 15:04")
+	/*var timeOrYear string
 	if modtime.Year() == time.Now().Year() {
-		timeOrYear = modtime.Format("15:04")
+		timeOrYear = modtime.Format("2006 15:04")
 	} else {
 		timeOrYear = modtime.Format("2006")
-	}
+	}*/
 
-	fmt.Fprintf(tw, "%s \t%s \t %s \t %s \t%s \t%s \t%s\n",
-		mode, owner, group, size, date, timeOrYear, name)
+	fmt.Fprintf(tw, "%s \t%s \t %s \t %s \t%s \t%s\n",
+		mode, owner, group, size, date, name)
 }
 
 func lsTabWriter() *tabwriter.Writer {

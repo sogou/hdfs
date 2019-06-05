@@ -8,7 +8,7 @@ import (
 )
 
 func mv(paths []string, force, treatDestAsFile bool) {
-	paths, nn, err := normalizePaths(paths)
+	paths, client, err := normalizePaths(paths)
 	if err != nil {
 		fatal(err)
 	}
@@ -17,11 +17,6 @@ func mv(paths []string, force, treatDestAsFile bool) {
 		fatalWithUsage("Both a source and destination are required.")
 	} else if hasGlob(paths[len(paths)-1]) {
 		fatal("The destination must be a single path.")
-	}
-
-	client, err := getClient(nn)
-	if err != nil {
-		fatal(err)
 	}
 
 	dest := paths[len(paths)-1]
