@@ -31,10 +31,11 @@ func ls(paths []string, long, all, humanReadable bool) {
 			if exception != nil {
 				fatal("NormalizePaths occur problem loading configuration: ", exception)
 			}
+
 			for k, v := range conf {
-				if strings.Contains(k, "fs.viewfs.mounttable.nsX.link") {
+				if strings.Contains(k, "fs.viewfs.mounttable") {
 					u, err := url.Parse(v)
-					if err == nil && strings.Count(u.Path,"/") == 1{
+					if err == nil && strings.Count(u.Path, "/") == 1 {
 						dirs = append(dirs, u.Path)
 					}
 				}
@@ -76,8 +77,8 @@ func ls(paths []string, long, all, humanReadable bool) {
 				fmt.Println(p)
 			}
 		}
-		//fmt.Println()
-		for i, dir := range dirs {
+
+		for i, dir := range abPath {
 			if i > 0 {
 				fmt.Println()
 			}

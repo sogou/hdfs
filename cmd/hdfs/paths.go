@@ -25,24 +25,26 @@ func userDir(client *hdfs.Client) string {
 // into absolute ones (by appending /user/<user>). If multiple HDFS urls with
 // differing hosts are passed in, it returns an error.
 func normalizePaths(paths []string) ([]string, *hdfs.Client, error) {
+
 	namenode := ""
 	cleanPaths := make([]string, 0, len(paths))
 
 	for _, rawurl := range paths {
-		url, err := url.Parse(rawurl)
+		fsUrl, err := url.Parse(rawurl)
+
 		if err != nil {
 			return nil, nil, err
 		}
 
-		if url.Host != "" {
-			if namenode != "" && namenode != url.Host {
+		if fsUrl.Host != "" {
+			if namenode != "" && namenode != fsUrl.Host {
 				return nil, nil, errMultipleNamenodeUrls
 			}
-
-			namenode = url.Host
+			namenode = fsUrl.Host
 		}
-		cleanPaths = append(cleanPaths, path.Clean(url.Path))
+		cleanPaths = append(cleanPaths, path.Clean(fsUrl.Path))
 	}
+
 	if namenode != "" {
 		client, err := getActiveNameNode(namenode, cleanPaths[0])
 		return cleanPaths, client, err
@@ -57,40 +59,63 @@ func normalizePaths(paths []string) ([]string, *hdfs.Client, error) {
 	firstLevelPath := "/" + pathsArray[1]
 	var secondPath string
 	var isFirstLevelPath bool
-	prefixPath := "fs.viewfs.mounttable.nsX.link."
+
+	viewfs := strings.Split(conf["fs.defaultFS"], "/")[2]
+	prefixPath := "fs.viewfs.mounttable." + viewfs + ".link."
 	prefixNNX := "dfs.ha.namenodes."
 	prefixNode := "dfs.namenode.rpc-address."
+
+	if strings.Contains(conf["fs.defaultFS"], "hdfs://") { // not viewfs
+		fsUrl := strings.Split(viewfs, ":")[0]
+		nnxArray := strings.Split(conf[prefixNNX+fsUrl], ",")
+
+		namenode = getNameNodeFromConf(nnxArray, prefixNode, fsUrl, conf)
+		fmt.Println(namenode)
+
+		client, err := getActiveNameNode(namenode, cleanPaths[0])
+		return cleanPaths, client, err
+	}
 
 	if len(pathsArray) > 2 && pathsArray[2] != "" {
 		secondPath = firstLevelPath + "/" + pathsArray[2]
 	}
 	node := conf[prefixPath+secondPath]
+
 	if node == "" {
 		isFirstLevelPath = true
 		node = conf[prefixPath+firstLevelPath]
 	}
+
 	u, err := url.Parse(node)
 	if err != nil {
 		return nil, nil, err
 	}
 	nnxArray := strings.Split(conf[prefixNNX+u.Host], ",")
-	for _, nni := range nnxArray {
-		tmp := conf[prefixNode+u.Host+"."+nni]
-		namenode += tmp
-		namenode += ","
-	}
-	namenode = strings.Trim(namenode, ",")
+	namenode = getNameNodeFromConf(nnxArray, prefixNode, u.Host, conf)
 
 	// namenode contains 2 value, eg: rsync.master003.sunshine.hadoop.js.ted:8020,rsync.master004.sunshine.hadoop.js.ted:8020
 	var existPath string
 	if isFirstLevelPath {
 		existPath = firstLevelPath
 	} else {
-		existPath = cleanPaths[0][0: strings.LastIndex(cleanPaths[0], "/")]
+		existPath = cleanPaths[0][0:strings.LastIndex(cleanPaths[0], "/")]
 	}
 	activennCli, err := getActiveNameNode(namenode, existPath)
 
 	return cleanPaths, activennCli, err
+}
+
+func getNameNodeFromConf(nnxArray []string, prefixNode string, host string, conf map[string]string) string {
+	var namenode string
+	if nnxArray == nil || len(nnxArray) == 0 {
+		return ""
+	}
+	for _, nni := range nnxArray {
+		tmp := conf[prefixNode+host+"."+nni]
+		namenode += tmp
+		namenode += ","
+	}
+	return strings.Trim(namenode, ",")
 }
 
 func getActiveNameNode(nn string, path string) (*hdfs.Client, error) {
@@ -118,6 +143,7 @@ func getActiveNameNode(nn string, path string) (*hdfs.Client, error) {
 func getClientAndExpandedPaths(paths []string) ([]string, *hdfs.Client, error) {
 
 	paths, nnClient, err := normalizePaths(paths)
+
 	if err != nil {
 		return nil, nil, err
 	}
