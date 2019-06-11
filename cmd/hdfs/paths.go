@@ -207,7 +207,8 @@ func expandGlobs(client *hdfs.Client, globbedPath string) ([]string, error) {
 			if fi.IsDir() {
 				children, err := expandGlobs(client, newPath)
 				if err != nil {
-					return nil, err
+					//return nil, err
+					continue
 				}
 
 				res = append(res, children...)
