@@ -82,8 +82,9 @@ func normalizePaths(paths []string) ([]string, *hdfs.Client, error) {
 		return nil, nil, err
 	}
 
-	nnxArray := strings.Split(conf[prefixNNX+u.Host], ",")             // nn3,nn4
-	namenode = getNameNodeFromConf(nnxArray, prefixNode, u.Host, conf) // rsync.master003.sunshine.hadoop.js.ted:8020,rsync.master004.sunshine.hadoop.js.ted:8020
+	pathNode := strings.Split(u.Host, ":")
+	nnxArray := strings.Split(conf[prefixNNX+pathNode[0]], ",")             // nn3,nn4
+	namenode = getNameNodeFromConf(nnxArray, prefixNode, pathNode[0], conf) // rsync.master003.sunshine.hadoop.js.ted:8020,rsync.master004.sunshine.hadoop.js.ted:8020
 	activennCli, err := getActiveNameNode(namenode, abPath)
 
 	return cleanPaths, activennCli, err
