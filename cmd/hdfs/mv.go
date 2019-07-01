@@ -5,6 +5,7 @@ import (
 	"path"
 
 	"github.com/colinmarc/hdfs/v2"
+	"strings"
 )
 
 func mv(paths []string, force, treatDestAsFile bool) {
@@ -66,6 +67,9 @@ func moveTo(client *hdfs.Client, source, dest string, force bool) {
 		if destInfo.IsDir() && !sourceInfo.IsDir() {
 			fatal("Can't replace directory with non-directory.")
 		} else if !force {
+			if strings.Contains(source, "._COPYING_") {
+				rm([]string{source}, false, true)
+			}
 			fatal(&os.PathError{"rename", dest, os.ErrExist})
 		}
 	} else if !os.IsNotExist(err) {

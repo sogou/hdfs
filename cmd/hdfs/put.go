@@ -8,7 +8,11 @@ import (
 	"path/filepath"
 
 	"github.com/colinmarc/hdfs/v2"
+	"strconv"
+	"time"
 )
+
+var SUFFIX = "._COPYING_"
 
 func put(args []string) {
 	if len(args) != 2 {
@@ -91,7 +95,9 @@ func putFromFile(client *hdfs.Client, source string, dest string) {
 		if fi.IsDir() {
 			client.Mkdir(fullDest, mode)
 		} else {
-			writer, err := client.Create(fullDest)
+			timeUnixNano := time.Now().UnixNano()
+			timestamp := strconv.FormatInt(timeUnixNano, 10)
+			writer, err := client.Create(fullDest + SUFFIX + "." + timestamp)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return nil
@@ -109,6 +115,7 @@ func putFromFile(client *hdfs.Client, source string, dest string) {
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 			}
+			mv([]string{fullDest + SUFFIX + "." + timestamp, fullDest}, false, false)
 		}
 
 		return nil
