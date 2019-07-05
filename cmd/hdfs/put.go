@@ -92,8 +92,12 @@ func putFromFile(client *hdfs.Client, source string, dest string) {
 		}
 
 		fullDest := path.Join(dest, rel)
-		if fi.IsDir() {
-			client.Mkdir(fullDest, mode)
+		if fi.IsDir() { // multi thread put same director to same director
+			err := client.Mkdir(fullDest, mode)
+			if err != nil {
+				fmt.Fprintln(os.Stderr, err)
+				fatal(err)
+			}
 		} else {
 			timeUnixNano := time.Now().UnixNano()
 			timestamp := strconv.FormatInt(timeUnixNano, 10)
@@ -103,19 +107,22 @@ func putFromFile(client *hdfs.Client, source string, dest string) {
 				return nil
 			}
 
-			defer writer.Close()
 			reader, err := os.Open(p)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 				return nil
 			}
 
-			defer reader.Close()
 			_, err = io.Copy(writer, reader)
 			if err != nil {
 				fmt.Fprintln(os.Stderr, err)
 			}
-			mv([]string{fullDest + SUFFIX + "." + timestamp, fullDest}, false, false)
+
+			defer func() {
+				reader.Close()
+				writer.Close()
+				mv([]string{fullDest + SUFFIX + "." + timestamp, fullDest}, true, false)
+			}()
 		}
 
 		return nil

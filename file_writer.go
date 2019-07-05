@@ -4,10 +4,12 @@ import (
 	"io"
 	"os"
 	"time"
+	"strconv"
 
 	hdfs "github.com/colinmarc/hdfs/v2/internal/protocol/hadoop_hdfs"
 	"github.com/colinmarc/hdfs/v2/internal/rpc"
 	"github.com/golang/protobuf/proto"
+	"github.com/colinmarc/hdfs/v2/hadoopconf"
 )
 
 // A FileWriter represents a writer for an open file in HDFS. It implements
@@ -43,7 +45,21 @@ func (c *Client) Create(name string) (*FileWriter, error) {
 		return nil, err
 	}
 
-	replication := int(defaults.GetReplication())
+	conf, err := hadoopconf.LoadFromEnvironment()
+	var localReplication int
+	if err == nil {
+		backup, parseErr := strconv.Atoi(conf["dfs.replication"])
+		if parseErr == nil {
+			localReplication = backup
+		}
+	}
+	var replication int
+	if localReplication > 0 {
+		replication = localReplication
+	} else {
+		replication = int(defaults.GetReplication())
+	}
+
 	blockSize := int64(defaults.GetBlockSize())
 	return c.CreateFile(name, replication, blockSize, 0644)
 }
