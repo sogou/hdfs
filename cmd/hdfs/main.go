@@ -48,6 +48,8 @@ Valid commands:
 
 	touchOpts = getopt.New()
 	touchc    = touchOpts.Bool('c')
+	toucha    = touchOpts.Bool('a')
+	touchm    = touchOpts.Bool('m')
 
 	chmodOpts = getopt.New()
 	chmodR    = chmodOpts.Bool('R')
@@ -108,7 +110,7 @@ func main() {
 		mkdir(mkdirOpts.Args(), *mkdirp)
 	case "touch":
 		touchOpts.Parse(argv)
-		touch(touchOpts.Args(), *touchc)
+		touch(touchOpts.Args(), *touchc, *toucha, *touchm)
 	case "get":
 		get(argv[1:])
 	case "put":
