@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -35,6 +36,12 @@ func get(args []string) {
 
 	err = client.Walk(source, func(p string, fi os.FileInfo, err error) error {
 		fullDest := filepath.Join(dest, strings.TrimPrefix(p, source))
+
+		exists := os.IsNotExist(err)
+		if err != nil && exists {
+			fmt.Println(err)
+			os.Exit(-1) // file not found
+		}
 
 		if fi.IsDir() {
 			err = os.Mkdir(fullDest, 0755)
